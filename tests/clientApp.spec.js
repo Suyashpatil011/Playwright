@@ -1,53 +1,52 @@
-
-
-const { test, expect } = require('@playwright/test')
+const { test, expect } = require('@playwright/test');
 
 test('Client App Login', async ({ page }) => {
+
+    // Test Data
     const productName = 'ZARA COAT 3';
-    const products = page.locator('.card-body')
-    const emailId = 'suyashpatil01@gmail.com'
-    await page.goto("https://rahulshettyacademy.com/client/#/auth/login");
-    await page.locator('#userEmail').fill(emailId)
-    await page.locator('#userPassword').fill('Suyash@001')
-    await page.locator('#login').click()
+    const emailId = 'suyashpatil01@gmail.com';
+    const pass = 'Suyash@001';
+
+    // Navigate to application
+    await page.goto('https://rahulshettyacademy.com/client/#/auth/login');
+
+    // Login to application
+    await page.getByPlaceholder('email@example.com').fill(emailId);
+    await page.getByPlaceholder('enter your passsword').fill(pass);
+    await page.getByRole('button', { name: 'Login' }).click();
+
+    // Wait until all API calls are completed
     await page.waitForLoadState('networkidle');
+
+    // Print all available product names
     const titlecart = await page.locator('.card-body b').allTextContents();
     console.log(titlecart);
 
-    const count = await products.count();
-    console.log("Item Count in the screen => " + count);
+    // Add the required product to cart
+    await page.locator('.card-body')
+        .filter({ hasText: productName })
+        .getByRole('button', { name: 'Add To Cart' })
+        .click();
 
-    for (let i = 0; i < count; i++) {
-        if (await products.nth(i).locator("b").textContent() == productName) {
-            await products.nth(i).locator("text= Add To Cart").click();
-            break;
-        }
-    }
-    await page.locator("[routerlink='/dashboard/cart']").click();
+    // Navigate to Cart page
+    await page.getByRole('listitem')
+        .getByRole('button', { name: 'cart' })
+        .click();
+
+    // Wait for cart items to load
     await page.locator('div li').first().waitFor();
-    const bool = await page.locator
-        ('h3:has-text("ZARA COAT 3")').isVisible();
-    expect(bool).toBeTruthy();
 
-    await page.locator("text='Checkout'").click();
+    // Verify selected product is present in cart
+    await expect(page.getByText(productName)).toBeVisible();
 
-    //   await page.locator("[placeholder='Select Country']").pressSequentially('Ind',{delay:100});
-    //   const dropdown = page.locator(".ta-results")
-    //   await dropdown.waitFor();
-    //   const options =  page.locator("button")
-    //   const optcount = await options.count();
+    // Proceed to checkout
+    await page.getByRole('button', { name: 'checkout' }).click();
 
-    //   for(let i=0; i<optcount; i++){
-    //     const text = await dropdown.locator("button").nth(i).textContent();
-    //         if(text.includes('India'))
-    //     {    
-    //          await options.nth(i).click();
+    // ====================================================
+    // Dynamic Country Selection (Recommended Approach)
+    // ====================================================
 
-    //         break;
-    //     }
-    //   }
-
-
+    /*
     await page.locator("[placeholder='Select Country']")
         .pressSequentially("Ind");
 
@@ -56,29 +55,73 @@ test('Client App Login', async ({ page }) => {
     await page.locator(".ta-results button")
         .getByText("India", { exact: true })
         .click();
+    */
 
+    // ====================================================
+    // Static Approach (Not Recommended)
+    // Depends on dropdown position and may fail if order changes
+    // ====================================================
 
-    expect(page.locator(".user__name [type='text']").first()).toHaveText(emailId);
-    await page.locator(".btnn").click();
-    await expect(page.locator(".hero-primary"))
-        .toHaveText("Thankyou for the order.");
-    const orderId = await page.locator(".em-spacer-1 .ng-star-inserted").textContent()
+    await page.getByPlaceholder('Select Country')
+        .pressSequentially('Ind');
 
-    console.log("Order id of the product is => " + orderId);
+    await page.getByRole('button', { name: 'India' }).nth(1)
+        .click();
+
+    // Verify logged-in email on checkout page
+    await expect(
+        page.locator(".user__name [type='text']").first()
+    ).toHaveText(emailId);
+
+    // Place the order
+    await page.getByText('PLACE ORDER').click();
+
+    // Verify successful order placement
+    await expect(
+        page.getByText('Thankyou for the order.')
+    ).toBeVisible();
+
+    // Capture Order ID
+    const orderId = await page.locator(
+        '.em-spacer-1 .ng-star-inserted'
+    ).textContent();
+
+    console.log('Order ID => ' + orderId);
+
+    // Navigate to Orders page
     await page.locator("label[routerlink*='myorders']").click();
-    await page.locator("tbody").waitFor()
-    const rows = page.locator("tbody tr")
 
+    // Wait for orders table to load
+    await page.locator('tbody').waitFor();
 
+    const rows = page.locator('tbody tr');
+
+    // Search for the created order in Orders history
     for (let i = 0; i < await rows.count(); i++) {
-        const rowsorderId = await rows.nth(i).locator("th").textContent();
+
+        const rowsorderId = await rows
+            .nth(i)
+            .locator('th')
+            .textContent();
+
         if (orderId.includes(rowsorderId)) {
-            await rows.nth(i).locator("button").first().click();
+
+            // Open order details
+            await rows.nth(i)
+                .locator('button')
+                .first()
+                .click();
+
             break;
         }
-
     }
 
-    const orderIdDetails = await page.locator(".col-text").textContent()
-    expect(orderId.includes(orderIdDetails)).toBeTruthy
-})
+    // Fetch Order ID from Order Details page
+    const orderIdDetails = await page
+        .locator('.col-text')
+        .textContent();
+
+    // Verify both Order IDs match
+    expect(orderId.includes(orderIdDetails))
+        .toBeTruthy();
+});
